@@ -32,6 +32,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: scores } = useApi<any>('/api/v1/scores');
   const { data: transfers } = useApi<any>('/api/v1/transfers');
+  const { data: insts } = useApi<any>('/api/v1/institutions');
 
   useEffect(() => { fetch('/api/v1/auth/me').then((r) => r.json()).then((d) => setUser(d.user ?? null)).catch(() => {}); }, []);
   async function logout() { await fetch('/api/v1/auth/logout', { method: 'POST' }); router.push('/login'); router.refresh(); }
@@ -39,6 +40,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const allLinks = useMemo(() => groups.flatMap((g) => g.items), []);
   const matches = query.trim() ? allLinks.filter(([, label]) => label.toLowerCase().includes(query.toLowerCase())) : [];
   const current = allLinks.find(([href]) => href === pathname)?.[1] ?? 'HemoNexus';
+  const scopeLabel = user?.institutionId
+    ? (insts?.institutions?.[0]?.name?.replace(' (SIMULATED)', '') ?? 'Institution')
+    : 'Network · all regions';
   const critical = (scores?.scores ?? []).filter((s: any) => s.band === 'CRITICAL').length;
   const pending = (transfers?.requests ?? []).filter((r: any) => r.state !== 'APPROVED').length;
 
@@ -69,7 +73,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <div className="ax-main">
         <header className="ax-topbar">
           <button className="ax-mobile-toggle" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={19} /></button>
-          <div className="ax-crumb"><span>Workspace</span><ChevronRight size={13} /><strong>{current}</strong></div>
+          <div className="ax-crumb"><span>{scopeLabel}</span><ChevronRight size={13} /><strong>{current}</strong></div>
           <div className="ax-search">
             <Search size={15} />
             <input aria-label="Search pages" placeholder="Search pages…" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && matches[0]) { router.push(matches[0][0]); setQuery(''); } }} />
