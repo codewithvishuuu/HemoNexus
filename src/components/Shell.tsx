@@ -1,56 +1,76 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
+import {
+  LayoutDashboard, Building2, Map as MapIcon, Package, LineChart, FlaskConical,
+  ClipboardCheck, ScrollText, MessageSquareText, Settings, LogOut, ChevronRight,
+} from 'lucide-react';
+import Logo from './Logo';
 
-const links = [
-  ['/dashboard', 'Command center'], ['/institutions', 'Institutions'], ['/map', 'Regional map'],
-  ['/inventory', 'Inventory'], ['/forecasts', 'Forecasting'], ['/simulation', 'Simulation'],
-  ['/approvals', 'Approvals'], ['/audit', 'Audit history'], ['/assistant', 'AI assistant'], ['/settings', 'Settings'],
-];
+const groups = [
+  { label: 'Overview', items: [
+    ['/dashboard', 'Command center', LayoutDashboard],
+    ['/institutions', 'Institutions', Building2],
+    ['/map', 'Regional map', MapIcon],
+  ] },
+  { label: 'Operations', items: [
+    ['/inventory', 'Inventory', Package],
+    ['/forecasts', 'Forecasting', LineChart],
+    ['/simulation', 'Simulation', FlaskConical],
+    ['/approvals', 'Approvals', ClipboardCheck],
+  ] },
+  { label: 'Intelligence', items: [
+    ['/assistant', 'AI assistant', MessageSquareText],
+    ['/audit', 'Audit history', ScrollText],
+    ['/settings', 'Settings', Settings],
+  ] },
+] as Array<{ label: string; items: Array<[string, string, ComponentType<{ size?: number; strokeWidth?: number }>]> }>;
 
-export function DataModeBanner() {
-  return <span className="badge sim" title="All institutions and stock in this build are synthetic">SIMULATED DATA</span>;
+export function DataModeBadge({ compact = false }: { compact?: boolean }) {
+  return <span className="badge sim" title="All institutions, units and events are synthetic">{compact ? 'SIMULATED' : 'SIMULATED DATA'}</span>;
 }
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    fetch('/api/v1/auth/me').then((r) => r.json()).then((d) => setUser(d.user ?? null)).catch(() => {});
-  }, []);
-  async function logout() {
-    await fetch('/api/v1/auth/logout', { method: 'POST' });
-    router.push('/login');
-  }
+  useEffect(() => { fetch('/api/v1/auth/me').then((r) => r.json()).then((d) => setUser(d.user ?? null)).catch(() => {}); }, []);
+  async function logout() { await fetch('/api/v1/auth/logout', { method: 'POST' }); router.push('/login'); router.refresh(); }
+  const current = groups.flatMap((g) => g.items).find(([href]) => href === pathname)?.[1] ?? 'HemoNexus';
 
   return (
-    <div className="app">
+    <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/dashboard" className="brand">
-          <div className="shield">H</div>
-          <div><div className="brand-name">HemoNexus</div><div className="brand-sub">Blood intelligence</div></div>
-        </Link>
-        <div className="nav-label">Workspace</div>
-        <nav className="nav">
-          {links.map(([href, label]) => (
-            <Link key={href} href={href} style={pathname === href ? { background: 'var(--navy-3)', color: '#fff' } : undefined}>{label}</Link>
-          ))}
-        </nav>
-        <div className="nav-label">Account</div>
-        <div style={{ padding: '0 10px', fontSize: 12, color: 'var(--muted)' }}>
-          {user ? <>{user.name}<br /><span className="mono">{user.role}</span></> : 'Not signed in'}
+        <Link href="/dashboard" className="brand"><Logo variant="dark-bg" height={30} className="brand-wordmark" /></Link>
+        {groups.map((group) => (
+          <div key={group.label}>
+            <div className="nav-caption">{group.label}</div>
+            <nav className="nav-list">
+              {group.items.map(([href, label, Icon]) => (
+                <Link key={href} href={href} className={`nav-item ${pathname === href ? 'active' : ''}`}>
+                  <Icon strokeWidth={1.8} /><span>{label}</span>
+                </Link>
+              ))}
+            </nav>
+          </div>
+        ))}
+        <div className="sidebar-foot">
+          <div className="who">{user?.name ?? 'Not signed in'}</div>
+          <div className="role">{user?.role ?? '—'}</div>
+          {user && <button className="btn ghost" style={{ marginTop: 10, width: '100%', justifyContent: 'flex-start' }} onClick={logout}><LogOut size={15} /> Sign out</button>}
         </div>
-        {user && <button className="btn ghost" style={{ margin: '12px 10px', width: 'calc(100% - 20px)' }} onClick={logout}>Sign out</button>}
       </aside>
-      <div className="main">
+      <div className="main-column">
         <header className="topbar">
-          <div style={{ color: 'var(--muted)', fontSize: 12 }}>Predictive Emergency Blood Shortage Network</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><DataModeBanner /><span className="mono muted" style={{ fontSize: 11 }}>seed 42 · v1.0</span></div>
+          <div className="crumb"><span>HemoNexus</span><ChevronRight size={13} /><strong>{current}</strong></div>
+          <div className="topbar-right">
+            <DataModeBadge />
+            <span className="mono small muted">seed 42 · v1.0</span>
+            <div className="avatar" title={user?.name ?? ''}>{(user?.name ?? 'HN').slice(0, 2).toUpperCase()}</div>
+          </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="page-wrap">{children}</main>
       </div>
     </div>
   );

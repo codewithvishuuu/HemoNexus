@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="HemoNexus App Icon">
+  <rect x="0" y="0" width="256" height="256" rx="56" ry="56" fill="#101B35"/>
+  <defs>
+    <clipPath id="shieldClip_appDark">
+      <path d="M 128 20 L 206 54 Q 214 57.5 214 66 L 214 140 C 214 184 178 214 133 234 Q 128 236.2 123 234 C 78 214 42 184 42 140 L 42 66 Q 42 57.5 50 54 L 128 20 Z"/>
+    </clipPath>
+    <mask id="networkMask_appDark">
+      <rect x="0" y="0" width="256" height="256" fill="#FFFFFF"/>
+      <circle cx="128" cy="130" r="20.5" fill="#000000"/>
+      <g stroke="#000000" stroke-width="15.5" stroke-linecap="butt" stroke-linejoin="miter" fill="none">
+        <line x1="128" y1="130" x2="84" y2="86"/>
+        <line x1="128" y1="130" x2="172" y2="174"/>
+        <line x1="128" y1="130" x2="166" y2="92"/>
+        <line x1="166" y1="92" x2="166" y2="16"/>
+        <line x1="166" y1="92" x2="224" y2="92"/>
+        <line x1="128" y1="130" x2="90" y2="168"/>
+        <line x1="90" y1="168" x2="32" y2="168"/>
+        <line x1="90" y1="168" x2="90" y2="240"/>
+      </g>
+      <!-- Clean junction fills at (166,92) and (90,168) -->
+      <circle cx="166" cy="92" r="7.75" fill="#000000"/>
+      <circle cx="90" cy="168" r="7.75" fill="#000000"/>
+    </mask>
+  </defs>
+  <g id="HemoNexus-Shield" transform="translate(25.6,25.6) scale(0.8)">
+    <g clip-path="url(#shieldClip_appDark)" mask="url(#networkMask_appDark)">
+      <path id="Shield-Navy-Base" d="M 128 20 L 206 54 Q 214 57.5 214 66 L 214 140 C 214 184 178 214 133 234 Q 128 236.2 123 234 C 78 214 42 184 42 140 L 42 66 Q 42 57.5 50 54 L 128 20 Z" fill="#FFFFFF"/>
+      <polygon id="Shield-Crimson-TopRight" points="128,0 256,0 256,92 166,92 128,130" fill="#C62845"/>
+      <polygon id="Shield-Crimson-Bottom" points="90,168 128,130 256,258 256,256 90,256" fill="#C62845"/>
+    </g>
+  </g>
+</svg>

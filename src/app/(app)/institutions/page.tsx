@@ -1,33 +1,34 @@
 'use client';
-import { useApi } from '@/lib/useApi';
 import { useState } from 'react';
+import { Building2, MapPin, ShieldCheck } from 'lucide-react';
+import { useApi } from '@/lib/useApi';
+import { PageHeader, Panel, Kpi, EmptyState, LoadingRows } from '@/components/ui';
 
 export default function Institutions() {
-  const { data } = useApi<any>('/api/v1/institutions');
+  const { data, loading } = useApi<any>('/api/v1/institutions');
   const [selected, setSelected] = useState<string>('');
   const list = data?.institutions ?? [];
   const inst = list.find((i: any) => i.id === selected) ?? list[0];
   return (
     <>
-      <div className="page-head"><div><h1>Institutions</h1><p className="sub">Every facility in this network is fictional and explicitly labelled simulated.</p></div></div>
-      <div className="grid g2">
-        <div className="card">
-          <h3>Participating facilities</h3>
-          <table><thead><tr><th>Name</th><th>Type</th><th>Region</th><th>Units</th><th>Verified</th></tr></thead><tbody>
-            {list.map((i: any) => <tr key={i.id} onClick={() => setSelected(i.id)} style={{ cursor: 'pointer' }}><td>{i.name}</td><td>{i.type}</td><td>{i.region}</td><td className="mono">{i._count?.units}</td><td>{i.verified ? 'Yes' : 'No'}</td></tr>)}
-          </tbody></table>
-        </div>
-        <div className="card">
-          <h3>{inst?.name ?? 'Select an institution'}</h3>
+      <PageHeader eyebrow="Network" title="Institutions" description="Fictional participating facilities. Every record is labelled simulated and is not a real hospital or blood bank." />
+      <div className="grid g-2-1">
+        <Panel title="Participating facilities" hint={`${list.length} in scope`}>
+          {loading ? <LoadingRows rows={5} /> : list.length ? <div className="table-wrap"><table><thead><tr><th>Facility</th><th>Type</th><th>Region</th><th className="num">Units</th><th>Status</th></tr></thead><tbody>
+            {list.map((i: any) => <tr key={i.id} onClick={() => setSelected(i.id)} style={{ cursor: 'pointer', background: inst?.id === i.id ? '#FBEBEE' : undefined }}><td>{i.name}</td><td>{i.type.replace('_', ' ')}</td><td>{i.region}</td><td className="num">{i._count?.units}</td><td><span className="badge neutral">{i.verified ? 'Verified' : 'Pending'}</span></td></tr>)}
+          </tbody></table></div> : <EmptyState title="No institutions in scope" />}
+        </Panel>
+        <Panel title="Facility detail" hint={inst?.name ?? '—'}>
           {inst ? <>
-            <p className="sub">{inst.type} · {inst.region} · {inst.lat.toFixed(3)}, {inst.lng.toFixed(3)}</p>
-            <div className="grid g2" style={{ marginTop: 16 }}>
-              <div><div className="muted" style={{ fontSize: 12 }}>Recorded units</div><div className="kpi">{inst._count?.units}</div></div>
-              <div><div className="muted" style={{ fontSize: 12 }}>Risk scores</div><div className="kpi">{inst._count?.scores}</div></div>
+            <div className="eyebrow">{inst.type.replace('_', ' ')}</div>
+            <div className="kpi-grid" style={{ gridTemplateColumns: '1fr 1fr', margin: '14px 0' }}>
+              <Kpi label="Units" value={inst._count?.units ?? 0} />
+              <Kpi label="Scores" value={inst._count?.scores ?? 0} />
             </div>
-            <div className="warn" style={{ marginTop: 16 }}>This is a synthetic institution. It is not a real hospital or blood bank and must not be represented as one.</div>
-          </> : <div className="empty">No institutions found.</div>}
-        </div>
+            <div className="small muted" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><MapPin size={14} /> {inst.lat.toFixed(3)}, {inst.lng.toFixed(3)} · {inst.region} region</div>
+            <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Synthetic institution — not a real healthcare facility.</div>
+          </> : <EmptyState title="Select a facility" />}
+        </Panel>
       </div>
     </>
   );

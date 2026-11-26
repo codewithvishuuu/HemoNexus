@@ -1,23 +1,29 @@
 'use client';
+import { Database, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useApi } from '@/lib/useApi';
+import { PageHeader, Panel } from '@/components/ui';
+
 export default function Settings() {
   const { data } = useApi<any>('/api/v1/health');
+  const rows: [string, string][] = [
+    ['Service', data?.service ?? '—'], ['Data mode', data?.dataMode ?? '—'],
+    ['Deterministic seed', String(data?.seed ?? '—')], ['Institutions', String(data?.institutions ?? '—')],
+    ['Status', data?.status ?? '—'],
+  ];
   return (
     <>
-      <div className="page-head"><div><h1>Settings &amp; platform state</h1><p className="sub">Environment and governance information for this simulated deployment.</p></div></div>
+      <PageHeader eyebrow="Administration" title="Settings & platform state" description="Runtime and governance information for this simulated deployment." />
       <div className="grid g2">
-        <div className="card"><h3>Runtime</h3><table><tbody>
-          <tr><td>Service</td><td className="mono">{data?.service ?? '—'}</td></tr>
-          <tr><td>Data mode</td><td className="mono">{data?.dataMode ?? '—'}</td></tr>
-          <tr><td>Deterministic seed</td><td className="mono">{data?.seed ?? '—'}</td></tr>
-          <tr><td>Institutions</td><td className="mono">{data?.institutions ?? '—'}</td></tr>
-          <tr><td>Status</td><td className="mono">{data?.status ?? '—'}</td></tr>
-        </tbody></table></div>
-        <div className="card"><h3>Governance</h3>
-          <div className="warn">Synthetic data only. No donor or patient identifiers are stored.</div>
-          <div className="warn" style={{ marginTop: 8 }}>DPDP-aligned minimisation, purpose limitation and role-based access are enforced. Phased commencement is documented in the planning set.</div>
-          <div className="warn" style={{ marginTop: 8 }}>Clinical decisions remain with qualified humans; this platform is decision support only.</div>
-        </div>
+        <Panel title="Runtime" hint="Public health endpoint">
+          <div className="table-wrap"><table><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table></div>
+        </Panel>
+        <Panel title="Governance">
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="notice"><LockKeyhole size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Synthetic data only. No donor or patient identifiers are stored.</div>
+            <div className="notice"><Database size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Role-based access, purpose limitation and append-only auditing are enforced.</div>
+            <div className="ok-note"><ShieldCheck size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Clinical decisions remain with qualified humans. This platform is decision support only.</div>
+          </div>
+        </Panel>
       </div>
     </>
   );

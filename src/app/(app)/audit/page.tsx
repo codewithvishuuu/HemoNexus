@@ -1,16 +1,19 @@
 'use client';
+import { FileClock } from 'lucide-react';
 import { useApi } from '@/lib/useApi';
+import { PageHeader, Panel, EmptyState, LoadingRows } from '@/components/ui';
+
 export default function Audit() {
-  const { data } = useApi<any>('/api/v1/audit');
+  const { data, loading } = useApi<any>('/api/v1/audit');
   const events = data?.events ?? [];
   return (
     <>
-      <div className="page-head"><div><h1>Audit history</h1><p className="sub">Append-only record of identity, inventory, scoring, approval and simulation events. No delete path exists.</p></div></div>
-      <div className="card">
-        {events.length ? <table><thead><tr><th className="mono">ID</th><th>Action</th><th>Actor</th><th>Entity</th><th>Summary</th><th className="mono">At</th></tr></thead><tbody>
-          {events.map((e: any) => <tr key={e.id}><td className="mono">{e.id.slice(-8)}</td><td className="mono">{e.action}</td><td>{e.actor}</td><td className="mono">{e.entity?.slice?.(-8) ?? e.entity}</td><td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.summary}</td><td className="mono">{e.at?.slice(0, 19)}</td></tr>)}
-        </tbody></table> : <div className="empty">No audit events recorded yet.</div>}
-      </div>
+      <PageHeader eyebrow="Governance" title="Audit history" description="Append-only record of identity, inventory, scoring, approval and simulation events. There is no update or delete path." />
+      <Panel title="Event log" hint={`${events.length} most recent`} action={<span className="badge neutral"><FileClock size={13} /> Immutable</span>}>
+        {loading ? <LoadingRows rows={4} /> : events.length ? <div className="table-wrap"><table><thead><tr><th>Event</th><th>Actor</th><th>Entity</th><th>Summary</th><th className="num">Timestamp</th></tr></thead><tbody>
+          {events.map((e: any) => <tr key={e.id}><td><span className="badge crimson">{e.action.replace(/_/g, ' ')}</span></td><td>{e.actor}</td><td className="mono">{String(e.entity ?? '').slice(-8)}</td><td className="small muted" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.summary}</td><td className="num">{String(e.at).slice(0, 19).replace('T', ' ')}</td></tr>)}
+        </tbody></table></div> : <EmptyState title="No audit events" message="Actions performed in the console will appear here." />}
+      </Panel>
     </>
   );
 }

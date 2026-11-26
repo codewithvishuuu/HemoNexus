@@ -1,46 +1,53 @@
 'use client';
-import { useApi } from '@/lib/useApi';
 import { useState } from 'react';
+import { MapPin, Route, Info } from 'lucide-react';
+import { useApi } from '@/lib/useApi';
 import { haversine } from '@/lib/geo';
+import { PageHeader, Panel, EmptyState, LoadingRows } from '@/components/ui';
+
+const COLORS: Record<string, string> = { CRITICAL: '#B4233B', HIGH: '#B85C1E', MODERATE: '#9A6707', STABLE: '#147D64' };
 
 export default function MapPage() {
-  const { data: insts } = useApi<any>('/api/v1/institutions');
+  const { data: insts, loading } = useApi<any>('/api/v1/institutions');
   const { data: scores } = useApi<any>('/api/v1/scores');
   const [region, setRegion] = useState('All');
   const all = insts?.institutions ?? [];
   const list = region === 'All' ? all : all.filter((i: any) => i.region === region);
-  const scoreMap: Record<string, string> = {};
-  (scores?.scores ?? []).forEach((s: any) => { if (!scoreMap[s.institutionId] || s.band === 'CRITICAL') scoreMap[s.institutionId] = s.band; });
-  const color: Record<string, string> = { CRITICAL: '#ef5b5b', HIGH: '#f08a4b', MODERATE: '#f5c451', STABLE: '#2dd4a7' };
+  const bandMap: Record<string, string> = {};
+  (scores?.scores ?? []).forEach((s: any) => { if (!bandMap[s.institutionId] || s.band === 'CRITICAL') bandMap[s.institutionId] = s.band; });
   const first = list[0];
-  const neighbours = first ? list.filter((i: any) => i.id !== first.id).map((i: any) => ({ ...i, km: haversine(first, i) })).sort((a: any, b: any) => a.km - b.km).slice(0, 4) : [];
+  const neighbours = first ? list.filter((i: any) => i.id !== first.id).map((i: any) => ({ ...i, km: haversine(first, i) })).sort((a: any, b: any) => a.km - b.km).slice(0, 5) : [];
+
+  const xy = (i: any) => ({ x: ((i.lng - 68) / 18) * 100, y: 100 - ((i.lat - 16) / 18) * 100 });
 
   return (
     <>
-      <div className="page-head"><div><h1>Regional intelligence</h1><p className="sub">Fictional facilities plotted on real coordinates. Distances use a documented Haversine fallback — PostGIS is not available in this environment.</p></div>
-        <select value={region} onChange={(e) => setRegion(e.target.value)}><option>All</option><option>North</option><option>East</option><option>South</option></select>
-      </div>
-      <div className="grid g2">
-        <div className="card">
-          <h3>Network view</h3>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: 360, background: '#0c1428', border: '1px solid var(--line)', borderRadius: 8 }}>
-            {list.map((i: any, idx: number) => {
-              const x = ((i.lng - 70) / 15) * 100, y = 100 - ((i.lat - 18) / 14) * 100;
-              return <g key={i.id} onClick={() => setRegion(i.region)} style={{ cursor: 'pointer' }}>
-                {idx > 0 && <line x1={x} y1={y} x2={((list[0].lng - 70) / 15) * 100} y2={100 - ((list[0].lat - 18) / 14) * 100} stroke="#273653" strokeWidth="0.25" />}
-                <circle cx={x} cy={y} r="2.2" fill={color[scoreMap[i.id]] ?? '#64748b'} stroke="#fff" strokeWidth="0.3" />
-                <text x={x + 2.5} y={y + 1} fill="#94a3bb" fontSize="2.2">{i.name.replace(' (SIMULATED)', '').slice(0, 14)}</text>
-              </g>;
-            })}
-          </svg>
-          <div className="muted" style={{ fontSize: 11, marginTop: 8 }}>Point color = highest current risk band. Lines are network proximity, not confirmed transport routes.</div>
-        </div>
-        <div className="card">
-          <h3>Nearby facilities {first ? `— ${first.name.replace(' (SIMULATED)', '')}` : ''}</h3>
-          {neighbours.length ? <table><thead><tr><th>Facility</th><th className="mono">km</th><th className="mono">Hours</th></tr></thead><tbody>
-            {neighbours.map((n: any) => <tr key={n.id}><td>{n.name}</td><td className="mono">{n.km.toFixed(1)}</td><td className="mono">{(n.km / 45).toFixed(1)}</td></tr>)}
-          </tbody></table> : <div className="empty">Select a region.</div>}
-          <div className="warn" style={{ marginTop: 14 }}>Transport-time figures are estimates for prioritisation only. Cold-chain verification and human authorisation are required before any movement.</div>
+      <PageHeader eyebrow="Regional intelligence" title="Network map" description="Fictional facilities on real coordinates. Distance uses the documented Haversine fallback; transport times are estimates for prioritisation only."
+        actions={<select value={region} onChange={(e) => setRegion(e.target.value)}><option>All</option><option>North</option><option>East</option><option>South</option></select>} />
+      <div className="grid g-2-1">
+        <Panel title="Regional network" hint="Point colour = highest current risk band">
+          {loading ? <LoadingRows rows={3} /> : list.length ? <div className="chart-shell">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: 460, background: '#F8FAFC', border: '1px solid var(--line)', borderRadius: 10 }}>
+              {list.slice(1).map((i: any) => { const a = xy(first), b = xy(i); return <line key={`l${i.id}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#D2D9E3" strokeWidth=".25" strokeDasharray="2 1.5" />; })}
+              {list.map((i: any) => { const p = xy(i); return <g key={i.id}>
+                <circle cx={p.x} cy={p.y} r="3.6" fill={COLORS[bandMap[i.id]] ?? '#7A8699'} opacity=".16" />
+                <circle cx={p.x} cy={p.y} r="1.8" fill={COLORS[bandMap[i.id]] ?? '#334566'} stroke="#fff" strokeWidth=".4" />
+                <text x={p.x + 2.4} y={p.y + .8} fontSize="2" fill="#334566">{i.name.replace(' (SIMULATED)', '').slice(0, 15)}</text>
+              </g>; })}
+            </svg>
+            <div className="chart-legend">{Object.entries(COLORS).map(([b, c]) => <span key={b}><i style={{ background: c }} />{b}</span>)}</div>
+          </div> : <EmptyState title="No facilities in this region" />}
+        </Panel>
+        <div className="stack">
+          <Panel title="Nearby facilities" hint={first?.name?.replace(' (SIMULATED)', '') ?? '—'}>
+            {neighbours.length ? <div className="table-wrap"><table><thead><tr><th>Facility</th><th className="num">km</th><th className="num">hrs</th></tr></thead><tbody>
+              {neighbours.map((n: any) => <tr key={n.id}><td>{n.name}</td><td className="num">{n.km.toFixed(1)}</td><td className="num">{(n.km / 45).toFixed(1)}</td></tr>)}
+            </tbody></table></div> : <EmptyState title="Select a region" />}
+          </Panel>
+          <Panel title="Reading this map">
+            <div className="small muted" style={{ display: 'flex', gap: 8 }}><MapPin size={15} style={{ flexShrink: 0 }} />Points are simulated facilities; lines show proximity, not confirmed logistics routes.</div>
+            <div className="notice" style={{ marginTop: 12 }}><Route size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Cold-chain verification and human authorisation are required before any movement.</div>
+          </Panel>
         </div>
       </div>
     </>
