@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Institution {
+  id          String   @id @default(cuid())
+  name        String
+  type        String
+  region      String
+  lat         Float
+  lng         Float
+  verified    Boolean  @default(false)
+  isSimulated Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  units       BloodUnit[]
+  consumption ConsumptionEvent[]
+  donations   DonationEvent[]
+  scores      RiskScore[]
+  trust       DataTrustRecord[]
+}
+
+model BloodUnit {
+  id               String   @id @default(cuid())
+  institutionId    String
+  group            String
+  component        String
+  collectedAt      DateTime
+  expiresAt        DateTime
+  storageCondition String
+  quarantineState  String   @default("IN_STOCK")
+  qualityVerified  Boolean  @default(false)
+  excursionOpen    Boolean  @default(false)
+  temperatureC     Float    @default(4)
+  lastUpdateAt     DateTime @default(now())
+  source           String   @default("SIMULATED")
+  verifiedBy       String?
+  distribution     String   @default("[]")
+  reserved         Boolean  @default(false)
+  institution      Institution @relation(fields: [institutionId], references: [id])
+  readings         TemperatureReading[]
+  excursions       ExcursionEvent[]
+  reservations     Reservation[]
+  @@index([institutionId, group, component])
+}
+
+model TemperatureReading {
+  id          String   @id @default(cuid())
+  unitId      String
+  temperatureC Float
+  recordedAt  DateTime @default(now())
+  unit        BloodUnit @relation(fields: [unitId], references: [id])
+}
+
+model ExcursionEvent {
+  id         String   @id @default(cuid())
+  unitId     String
+  startedAt  DateTime @default(now())
+  endedAt    DateTime?
+  reason     String?
+  resolvedBy String?
+  unit       BloodUnit @relation(fields: [unitId], references: [id])
+}
+
+model ConsumptionEvent {
+  id            String   @id @default(cuid())
+  institutionId String
+  group         String
+  component     String
+  units         Int
+  occurredAt    DateTime
+  source        String   @default("SIMULATED")
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  @@index([institutionId, group, component, occurredAt])
+}
+
+model DonationEvent {
+  id            String   @id @default(cuid())
+  institutionId String
+  group         String
+  units         Int
+  arrivedAt     DateTime
+  availableAt   DateTime
+  institution   Institution @relation(fields: [institutionId], references: [id])
+}
+
+model DataTrustRecord {
+  id               String   @id @default(cuid())
+  institutionId    String
+  lastUpdateAt     DateTime @default(now())
+  verificationState String  @default("VERIFIED")
+  missingFields    String   @default("[]")
+  conflicts        String   @default("[]")
+  staleFlag        Boolean  @default(false)
+  completenessPct  Int      @default(100)
+  institution      Institution @relation(fields: [institutionId], references: [id])
+}
+
+model ComponentRule {
+  id            String @id @default(cuid())
+  component     String @unique
+  storageMin    Float
+  storageMax    Float
+  shelfLifeDays Int
+  transportMin  Float
+  transportMax  Float
+  source        String
+  version       String
+}
+
+model ForecastSnapshot {
+  id           String   @id @default(cuid())
+  region       String
+  group        String
+  component    String
+  asOf         DateTime @default(now())
+  point        String
+  low          String
+  high         String
+  modelVersion String
+  metrics      String
+  state        String   @default("OK")
+  dataVersion  String
+  @@unique([region, group, component, asOf, dataVersion])
+}
+
+model RiskScore {
+  id              String   @id @default(cuid())
+  institutionId   String
+  group           String
+  component       String
+  band            String
+  raw             Float
+  factors         String
+  weightsVersion  String
+  asOf            DateTime @default(now())
+  state           String   @default("OK")
+  institution     Institution @relation(fields: [institutionId], references: [id])
+  @@index([institutionId, band])
+}
+
+model Alert {
+  id            String   @id @default(cuid())
+  scoreId       String
+  institutionId String
+  severity      String
+  state         String   @default("OPEN")
+  reason        String
+  createdAt     DateTime @default(now())
+}
+
+model TransferRequest {
+  id             String   @id @default(cuid())
+  fromId         String
+  toId           String
+  group          String
+  component      String
+  units          Int
+  state          String   @default("PENDING_APPROVAL")
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+  approvals      Approval[]
+  reservations   Reservation[]
+}
+
+model Approval {
+  id        String   @id @default(cuid())
+  requestId String
+  checkpoint String
+  actor     String
+  note      String?
+  createdAt DateTime @default(now())
+  request   TransferRequest @relation(fields: [requestId], references: [id])
+}
+
+model Reservation {
+  id             String   @id @default(cuid())
+  unitId         String
+  requestId      String
+  state          String   @default("ACTIVE")
+  expiresAt      DateTime
+  idempotencyKey String
+  unit           BloodUnit @relation(fields: [unitId], references: [id])
+  request        TransferRequest @relation(fields: [requestId], references: [id])
+  @@index([unitId, state])
+}
+
+model SimulationRun {
+  id         String   @id @default(cuid())
+  actor      String
+  scenario   String
+  assumptions String
+  result     String
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actor         String
+  institutionId String?
+  action        String
+  entity        String
+  summary       String
+  traceId       String?
+  at            DateTime @default(now())
+  @@index([entity, at])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String
+  institutionId String?
+  name         String
+  createdAt    DateTime @default(now())
+}
