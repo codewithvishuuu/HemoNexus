@@ -66,6 +66,7 @@ Set `DATABASE_URL` to a PostgreSQL connection string, `JWT_SECRET` to a random v
 ## Known limitations
 
 - All data is simulated; no clinical validation or real institution is connected.
-- PostGIS could not be verified in the build environment; Haversine distance is used and clearly disclosed.
-- The Python service is optional at runtime; the TypeScript fallback produces the same deterministic results.
+- Production uses Neon Postgres with **PostGIS 3.6 verified** (`SELECT postgis_version()`). The application currently computes distances with the portable Haversine fallback; PostGIS is provisioned and ready for a geospatial query layer.
+- Express and FastAPI are implemented and run locally; the deployed production API is served by equivalent Next.js route handlers calling the same domain layer. The standalone Python service is not separately deployed.
+- Database backups/recovery are provider-managed by Neon; the documented RPO/RTO values are planning assumptions.
 - No LLM is used for numeric scoring. The assistant only phrases answers from read-only platform data.
