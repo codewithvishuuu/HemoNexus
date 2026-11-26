@@ -1,8 +1,22 @@
 # HemoNexus
 
+**Live Demo:** https://hemonexus-rho.vercel.app
+
 **Predictive Emergency Blood Shortage Network** — a decision-support and coordination platform that forecasts shortage risk, explains it, and finds feasible verified surplus across a participating network.
 
 > **Safety notice:** HemoNexus is decision support, not a clinical device. All institutions, units and events in this build are **[SIMULATED]**. No real hospital, donor or patient data is used. Compatibility, cold-chain release and transfer approval always require qualified humans.
+
+## Overview
+
+HemoNexus is a predictive emergency blood shortage network that gives hospitals and blood banks a shared operational view of blood availability and risk. It provides:
+
+- **Inventory visibility and forecasting** — unit-level stock, expiry and cold-chain state, with demand forecasts from seasonal-naive, moving-average and Holt-Winters models plus rolling-origin backtesting.
+- **Regional shortage risk intelligence** — explainable risk bands for blood groups and locations, derived from measurable factors rather than opaque scores.
+- **Blood-unit matching** — ABO/Rh-aware candidate discovery filtered by verified stock, expiry, transport time and cold-chain feasibility.
+- **Transfer reservations and approval workflows** — transaction-safe reservations with three human checkpoints (two institutional approvals and one qualified clinical sign-off).
+- **Simulation, audit logs and an institutional dashboard** — isolated what-if scenarios, append-only event history and a command center for coordinators.
+
+**Disclosure:** The platform currently uses **synthetic/demo data only**. Forecasting and risk scores are **decision-support features, not clinically validated predictions**. HemoNexus is a **hackathon demonstration prototype**, not a clinically validated or production-ready medical system. There is **no real hospital integration** at this time.
 
 ## Quick start
 
