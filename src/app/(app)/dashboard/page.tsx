@@ -1,76 +1,156 @@
 'use client';
 import Link from 'next/link';
-import { Activity, PackageCheck, Building2, ShieldAlert, ArrowRight, RefreshCw } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useEffect, useState } from 'react';
+import {
+  Activity, ArrowRight, RefreshCw, Package, ShieldAlert, Building2, ClipboardCheck,
+  LineChart as LineIcon, ThermometerSnowflake, Clock3, GitBranch,
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  ComposedChart, Line, Area,
+} from 'recharts';
 import { useApi } from '@/lib/useApi';
-import { PageHeader, Panel, Kpi, StatusBadge, EmptyState, LoadingRows, FactorBar } from '@/components/ui';
+import { PageHead, Metric, Panel, RiskPill, EmptyBlock, SkeletonRows, InfoNote, ActivityRow } from '@/components/console';
+
+const GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 export default function Dashboard() {
-  const { data: units, loading: lu } = useApi<any>('/api/v1/inventory/units?eligibleOnly=true');
-  const { data: scores, loading: ls } = useApi<any>('/api/v1/scores');
+  const { data: scores, loading: loadingScores } = useApi<any>('/api/v1/scores');
   const { data: insts } = useApi<any>('/api/v1/institutions');
   const { data: transfers } = useApi<any>('/api/v1/transfers');
+  const { data: audit } = useApi<any>('/api/v1/audit');
+  const { data: forecasts } = useApi<any>('/api/v1/forecasts?region=East&group=O-&component=RBC');
+  const { data: me } = useApi<any>('/api/v1/auth/me');
+  const [groupUnits, setGroupUnits] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all(GROUPS.map((g) => fetch(`/api/v1/inventory/units?group=${encodeURIComponent(g)}`).then((r) => r.json()).catch(() => ({ units: [] }))))
+      .then((parts) => setGroupUnits(parts.flatMap((p) => p.units ?? [])))
+      .catch(() => setGroupUnits([]));
+  }, []);
+
   const rows = scores?.scores ?? [];
-  const critical = rows.filter((r: any) => r.band === 'CRITICAL').length;
-  const distribution = ['CRITICAL', 'HIGH', 'MODERATE', 'STABLE'].map((b) => ({ band: b, count: rows.filter((r: any) => r.band === b).length }));
-  const top = rows[0];
+  const critical = rows.filter((r: any) => r.band === 'CRITICAL');
+  const high = rows.filter((r: any) => r.band === 'HIGH');
+  const available = groupUnits.filter((u: any) => u.eligible).length;
+  const quarantined = groupUnits.filter((u: any) => u.quarantineState === 'QUARANTINED' || u.excursionOpen).length;
+  const pending = (transfers?.requests ?? []).filter((r: any) => r.state !== 'APPROVED');
+  const nearExpiry = groupUnits.filter((u: any) => {
+    if (!u.eligible || !u.expiresAt) return false;
+    return (new Date(u.expiresAt).getTime() - Date.now()) / 86400000 <= 14;
+  }).length;
+
+  const distribution = GROUPS.map((g) => {
+    const all = groupUnits.filter((u: any) => u.group === g);
+    return {
+      group: g,
+      available: all.filter((u: any) => u.eligible).length,
+      restricted: all.filter((u: any) => !u.eligible).length,
+    };
+  });
+  const riskBands = ['CRITICAL', 'HIGH', 'MODERATE', 'STABLE'].map((band) => ({ band, count: rows.filter((r: any) => r.band === band).length }));
+  const observed = (forecasts?.series ?? []).slice(-32).map((v: number, i: number) => ({ i, actual: v }));
+  const forecastPoints = (forecasts?.forecast?.point ?? []).map((v: number, i: number) => ({ i: observed.length + i, forecast: v, low: forecasts.forecast.low[i], high: forecasts.forecast.high[i] }));
+  const chartData = [...observed, ...forecastPoints];
+  const regions = (insts?.institutions ?? []).reduce((acc: Record<string, number>, i: any) => { acc[i.region] = (acc[i.region] ?? 0) + 1; return acc; }, {});
+  const regionRisk = Object.keys(regions).map((r) => ({
+    region: r, facilities: regions[r],
+    critical: rows.filter((x: any) => x.band === 'CRITICAL' && x.institution?.region === r).length,
+  }));
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <>
-      <PageHeader
-        eyebrow="Network overview"
-        title="Command center"
-        description="A live view of shortage risk, verified supply and coordination activity across the synthetic network."
-        actions={<button className="btn secondary" onClick={() => fetch('/api/v1/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(() => location.reload())}><RefreshCw size={14} /> Recompute scores</button>}
+      <PageHead
+        section="Overview · command center"
+        title={`${greeting}, ${(me?.user?.name ?? 'Coordinator').split(' ').slice(-1)[0]}`}
+        description="A working view of shortage risk, verified supply and coordination activity across the synthetic network."
+        meta={<><span className="badge neutral">{dateLabel}</span><span className="badge crimson">Network context · all regions</span><span className="badge sim">SIMULATED DATA</span></>}
+        actions={<div className="ax-quick-actions">
+          <button className="btn secondary" onClick={() => fetch('/api/v1/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(() => location.reload())}><RefreshCw size={14} /> Recompute scores</button>
+          <Link className="btn" href="/approvals">Review approvals <ArrowRight size={14} /></Link>
+        </div>}
       />
 
-      <div className="kpi-grid">
-        <Kpi label="Critical scores" value={critical} unit={`/ ${rows.length}`} foot="groups requiring escalation" tone="critical" />
-        <Kpi label="Eligible units" value={units?.total ?? '—'} foot="verified and in date" tone="stable" />
-        <Kpi label="Facilities" value={insts?.institutions?.length ?? '—'} foot="simulated participants" tone="crimson" />
-        <Kpi label="Open transfers" value={(transfers?.requests ?? []).filter((r: any) => r.state !== 'APPROVED').length} foot="awaiting human action" />
+      <div className="ax-metric-grid">
+        <Metric label="Available units" value={available || '—'} note="verified, unexpired, unrestricted" icon={Package} tone="stable" />
+        <Metric label="Critical / high risk" value={critical.length + high.length} unit={`/ ${rows.length}`} note="stored explainable scores" icon={ShieldAlert} tone="critical" />
+        <Metric label="Active institutions" value={insts?.institutions?.length ?? '—'} note="simulated participants" icon={Building2} />
+        <Metric label="Pending approvals" value={pending.length} note="human action required" icon={ClipboardCheck} tone="amber" />
+        <Metric label="Forecast signals" value={critical.length} note="critical bands this week" icon={LineIcon} tone="crimson" />
       </div>
 
-      <div className="grid g-2-1" style={{ marginTop: 18 }}>
-        <Panel title="Shortage risk register" hint="Ranked by composite risk score" action={<Link className="btn ghost" href="/forecasts">Backtest evidence <ArrowRight size={14} /></Link>}>
-          {ls ? <LoadingRows rows={3} /> : rows.length ? (
-            <div className="table-wrap"><table><thead><tr><th>Institution</th><th>Group / component</th><th>Band</th><th className="num">Score</th></tr></thead><tbody>
-              {rows.slice(0, 9).map((r: any) => <tr key={r.id}><td>{r.institution?.name?.replace(' (SIMULATED)', '')}</td><td className="mono">{r.group} · {r.component}</td><td><StatusBadge band={r.band} /></td><td className="num">{Number(r.raw).toFixed(2)}</td></tr>)}
-            </tbody></table></div>
-          ) : <EmptyState title="No scores computed" message="Run the scoring pipeline to populate the risk register." />}
-        </Panel>
-        <div className="stack">
-          <Panel title="Risk distribution" hint="Current synthetic network">
-            <div className="chart-shell">
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={distribution} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                  <CartesianGrid stroke="#E3E7ED" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="band" tick={{ fontSize: 9 }} /><YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ border: '1px solid #E3E7ED', borderRadius: 8, fontSize: 12 }} />
-                  <Bar dataKey="count" fill="#C62845" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="chart-note">Counts are derived from stored scores; no estimated values.</div>
+      <div className="ax-grid-main">
+        <Panel title="Blood inventory distribution" subtitle="Available units by ABO/Rh group" icon={Package} action={<Link className="btn ghost" href="/inventory">Open inventory <ArrowRight size={14} /></Link>}>
+          {groupUnits.length ? <>
+            <div className="ax-group-bars">
+              {distribution.map((d) => <div className="ax-group-bar" key={d.group}>
+                <span className="mono">{d.group}</span>
+                <div className="track"><div className="fill" style={{ width: `${Math.min(100, d.available * 5)}%` }} /></div>
+                <span className="num">{d.available}</span>
+              </div>)}
             </div>
-          </Panel>
-          <Panel title="Top factor signal" hint={top ? `${top.group} / ${top.component}` : '—'}>
-            {top ? Object.entries(JSON.parse(top.factors || '{}')).slice(0, 3).map(([k, v]) => <FactorBar key={k} label={k} value={Number(v)} />) : <div className="small muted">No factors available.</div>}
-          </Panel>
-        </div>
+            <div className="ax-group-bars" style={{ marginTop: 16 }}>
+              <div className="ax-group-bar"><span className="mono">Q</span><div className="track"><div className="fill neg" style={{ width: `${Math.min(100, quarantined * 3)}%` }} /></div><span className="num">{quarantined}</span></div>
+            </div>
+            <div className="ax-inline-legend"><span><i style={{ background: 'var(--crimson)' }} /> Available</span><span><i style={{ background: 'var(--navy)' }} /> Quarantined / excursion — excluded from availability</span></div>
+          </> : <SkeletonRows rows={4} />}
+        </Panel>
+
+        <Panel title="Demand forecast" subtitle="East region · O− RBC · units per week" icon={LineIcon} action={<Link className="btn ghost" href="/forecasts">Validation <ArrowRight size={14} /></Link>}>
+          {chartData.length > 1 ? <div className="chart-shell">
+            <ResponsiveContainer width="100%" height={210}>
+              <ComposedChart data={chartData} margin={{ top: 6, right: 8, bottom: 0, left: -18 }}>
+                <CartesianGrid stroke="#E3E7ED" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="i" tick={{ fontSize: 9 }} /><YAxis tick={{ fontSize: 10 }} />
+                <Tooltip contentStyle={{ border: '1px solid var(--line)', borderRadius: 8, fontSize: 11 }} />
+                <Area dataKey="high" stroke="none" fill="#C62845" fillOpacity={.08} isAnimationActive={false} />
+                <Area dataKey="low" stroke="none" fill="#fff" fillOpacity={1} isAnimationActive={false} />
+                <Line dataKey="actual" stroke="#101B35" strokeWidth={2} dot={false} name="Observed" isAnimationActive={false} />
+                <Line dataKey="forecast" stroke="#C62845" strokeWidth={2} strokeDasharray="5 4" dot={false} name="Forecast" isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div className="chart-legend"><span><i style={{ background: '#101B35' }} />Observed</span><span><i style={{ background: '#C62845' }} />Forecast</span><span><i style={{ background: '#F3CDD4' }} />80% interval</span></div>
+            <div className="chart-note">Model coverage {Number(forecasts?.backtest?.metrics?.coverage ?? 0).toFixed(2)} vs nominal 0.80 — disclosed limitation.</div>
+          </div> : <SkeletonRows rows={3} />}
+        </Panel>
+
+        <Panel title="Regional network" subtitle="Facility count and critical signals by region" icon={Building2} action={<Link className="btn ghost" href="/map">Open map <ArrowRight size={14} /></Link>}>
+          {regionRisk.length ? <div className="table-wrap"><table className="ax-table"><thead><tr><th>Region</th><th className="num">Facilities</th><th className="num">Critical</th></tr></thead><tbody>
+            {regionRisk.map((r) => <tr key={r.region}><td>{r.region}</td><td className="num">{r.facilities}</td><td className="num">{r.critical > 0 ? <span className="badge CRITICAL">{r.critical}</span> : '—'}</td></tr>)}
+          </tbody></table></div> : <EmptyBlock title="No regions loaded" />}
+        </Panel>
+
+        <Panel title="Risk overview" subtitle={`${rows.length} scored group / component pairs`} icon={ShieldAlert}>
+          {loadingScores ? <SkeletonRows rows={3} /> : rows.length ? <>
+            <div className="ax-group-bars">
+              {riskBands.map((b) => <div className="ax-group-bar" key={b.band}>
+                <span style={{ width: 74, fontSize: 11 }}>{b.band}</span>
+                <div className="track"><div className={`fill ${b.band === 'CRITICAL' ? '' : b.band === 'HIGH' ? 'neg' : ''}`} style={{ width: `${Math.min(100, b.count * 8)}%` }} /></div>
+                <span className="num">{b.count}</span>
+              </div>)}
+            </div>
+            {critical[0] && <div style={{ marginTop: 16 }}><div className="small muted" style={{ marginBottom: 8 }}>Top explainable signal · {critical[0].group} / {critical[0].component}</div>
+              {Object.entries(JSON.parse(critical[0].factors || '{}')).slice(0, 3).map(([k, v]) => <div key={k} className="ax-group-bar"><span style={{ width: 110, fontSize: 11 }}>{k.replace(/_/g, ' ')}</span><div className="track"><div className="fill" style={{ width: `${Math.round(Number(v) * 100)}%` }} /></div><span className="num">{Math.round(Number(v) * 100)}%</span></div>)}
+            </div>}
+          </> : <EmptyBlock title="No scores yet" message="Recompute scores to populate the risk overview." />}
+        </Panel>
       </div>
 
-      <div className="grid g2" style={{ marginTop: 18 }}>
-        <Panel title="Recent transfer activity" hint="Requests and approval state">
-          {(transfers?.requests ?? []).length ? <div className="table-wrap"><table><thead><tr><th>Request</th><th>Blood group</th><th>State</th></tr></thead><tbody>
-            {transfers.requests.slice(0, 5).map((r: any) => <tr key={r.id}><td className="mono">{r.id.slice(-8)}</td><td className="mono">{r.group} · {r.component}</td><td><span className="badge neutral">{r.state.replace(/_/g, ' ')}</span></td></tr>)}
-          </tbody></table></div> : <EmptyState title="No transfer requests" message="Create one from a matching suggestion." />}
+      <div className="ax-grid-bottom">
+        <Panel title="Critical shortage alerts" subtitle="Highest stored risk bands" icon={ShieldAlert} action={<Link className="btn ghost" href="/forecasts">Evidence <ArrowRight size={14} /></Link>}>
+          {critical.length ? critical.slice(0, 5).map((r: any) => <div className="ax-activity-row" key={r.id}><span className="ax-activity-dot critical" /><div><strong>{r.institution?.name?.replace(' (SIMULATED)', '')}</strong><span>{r.group} / {r.component} · {Object.keys(JSON.parse(r.factors || '{}')).length} explainable factors</span></div><RiskPill band={r.band} /></div>) : <EmptyBlock title="No critical alerts" message="All scored groups are currently below the critical threshold." />}
         </Panel>
-        <Panel title="Operational boundaries">
-          <div className="stack" style={{ gap: 10 }}>
-            <div className="notice"><ShieldAlert size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Quarantined or temperature-excursion units never appear as eligible stock.</div>
-            <div className="notice"><Activity size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Two institutional approvals and one clinical sign-off are required for every transfer.</div>
-            <div className="notice"><PackageCheck size={15} style={{ verticalAlign: -3, marginRight: 6 }} />Simulations run on cloned state and cannot change live inventory.</div>
-          </div>
+        <Panel title="Transfer approvals" subtitle="Requests awaiting human action" icon={ClipboardCheck} action={<Link className="btn ghost" href="/approvals">Open <ArrowRight size={14} /></Link>}>
+          {pending.length ? pending.slice(0, 5).map((r: any) => <ActivityRow key={r.id} title={`${r.group} / ${r.component}`} detail={`Request ${r.id.slice(-8)} · ${r.units} unit(s)`} meta={r.state.replace(/_/g, ' ')} tone="amber" />) : <EmptyBlock title="No pending approvals" message="Transfer requests will appear here." />}
+        </Panel>
+        <Panel title="Recent activity" subtitle="Append-only audit trail" icon={Activity} action={<Link className="btn ghost" href="/audit">Full history <ArrowRight size={14} /></Link>}>
+          {(audit?.events ?? []).length ? audit.events.slice(0, 5).map((e: any) => <ActivityRow key={e.id} title={e.action.replace(/_/g, ' ')} detail={`${e.actor} · ${String(e.entity).slice(-8)}`} meta={String(e.at).slice(11, 19)} />) : <EmptyBlock title="No audited events" />}
+        </Panel>
+        <Panel title="Inventory exceptions" subtitle="Cold-chain and expiry watch" icon={ThermometerSnowflake} action={<Link className="btn ghost" href="/inventory">Review <ArrowRight size={14} /></Link>}>
+          <InfoNote tone="notice"><Clock3 size={14} /> {nearExpiry} eligible units expire within 14 days; {quarantined} units are quarantined or excursion-affected and excluded from matching.</InfoNote>
+          <div className="small muted" style={{ marginTop: 10 }}><GitBranch size={13} /> Exceptions are recorded from verified facts. Human review is required before any release.</div>
         </Panel>
       </div>
     </>
