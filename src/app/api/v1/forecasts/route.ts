@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSeries, runBacktest } from '@/lib/domain';
 import { forecast } from '@/lib/analytics';
+import { guard } from '@/lib/guard';
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
+  const g = await guard();
+  if (g instanceof NextResponse) return g;
   const url = new URL(req.url);
   const region = url.searchParams.get('region') ?? 'East';
   const group = url.searchParams.get('group') ?? 'O-';

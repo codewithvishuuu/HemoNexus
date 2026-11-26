@@ -90,8 +90,12 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--crims
   .nav { display: flex; flex-wrap: wrap; }
   .nav-label, .brand-sub { display: none; }
   .content { padding: 18px 14px 50px; }
+  .topbar { flex-wrap: wrap; height: auto; min-height: 62px; padding: 10px 14px; gap: 8px; }
+  .page-head { flex-wrap: wrap; }
   .g4, .g3, .g2 { grid-template-columns: 1fr; }
+  .grid > * { min-width: 0; }
+  .card { min-width: 0; overflow: hidden; }
   .hero { padding: 50px 20px; } .hero h1 { font-size: 36px; }
   .feature-strip { grid-template-columns: 1fr; }
-  table { display: block; overflow-x: auto; }
+  table { display: block; overflow-x: auto; width: 100%; }
 }

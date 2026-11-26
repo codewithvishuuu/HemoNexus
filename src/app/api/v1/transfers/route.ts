@@ -3,13 +3,20 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireUser, can } from '@/lib/auth';
 import { audit, eligible } from '@/lib/domain';
+import { guard, scopedInstitutionFilter } from '@/lib/guard';
 export const runtime = 'nodejs';
 
 const createSchema = z.object({ fromId: z.string(), toId: z.string(), group: z.string(), component: z.string(), units: z.number().int().positive(), unitId: z.string().optional() });
 
 export async function GET() {
-  const requests = await prisma.transferRequest.findMany({ include: { approvals: true, reservations: true }, orderBy: { createdAt: 'desc' }, take: 100 });
-  return NextResponse.json({ requests, asOf: new Date().toISOString(), dataMode: 'SIMULATED' });
+  const g = await guard();
+  if (g instanceof NextResponse) return g;
+  const scope = scopedInstitutionFilter(g.user);
+  const requests = await prisma.transferRequest.findMany({
+    where: scope ? { OR: [{ fromId: scope }, { toId: scope }] } : {},
+    include: { approvals: true, reservations: true }, orderBy: { createdAt: 'desc' }, take: 100,
+  });
+  return NextResponse.json({ requests, scope: scope ?? 'NETWORK', asOf: new Date().toISOString(), dataMode: 'SIMULATED' });
 }
 
 export async function POST(req: Request) {
@@ -19,6 +26,10 @@ export async function POST(req: Request) {
   }
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: { code: 'VALIDATION', message: 'Invalid transfer request' } }, { status: 422 });
+  const scope = scopedInstitutionFilter(user);
+  if (scope && String(parsed.data.fromId) !== scope) {
+    return NextResponse.json({ error: { code: 'CROSS_INSTITUTION', message: 'Source institution is outside your scope' } }, { status: 403 });
+  }
   const key = req.headers.get('idempotency-key') ?? `${parsed.data.fromId}-${parsed.data.toId}-${parsed.data.group}-${Date.now()}`;
 
   const existing = await prisma.transferRequest.findUnique({ where: { idempotencyKey: key } });

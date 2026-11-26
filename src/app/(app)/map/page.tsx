@@ -6,7 +6,6 @@ import { haversine } from '@/lib/geo';
 export default function MapPage() {
   const { data: insts } = useApi<any>('/api/v1/institutions');
   const { data: scores } = useApi<any>('/api/v1/scores');
-  const { data: candidates } = useApi<any>('/api/v1/matching?fromId=sim&group=O-&component=RBC&radiusKm=150');
   const [region, setRegion] = useState('All');
   const all = insts?.institutions ?? [];
   const list = region === 'All' ? all : all.filter((i: any) => i.region === region);

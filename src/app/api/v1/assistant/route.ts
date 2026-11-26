@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { guard } from '@/lib/guard';
 export const runtime = 'nodejs';
 
 const schema = z.object({ question: z.string().min(3).max(500) });
 
 export async function POST(req: Request) {
+  const g = await guard();
+  if (g instanceof NextResponse) return g;
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: { code: 'VALIDATION' } }, { status: 422 });
   const q = parsed.data.question.toLowerCase();

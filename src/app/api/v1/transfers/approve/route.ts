@@ -16,7 +16,8 @@ export async function POST(req: Request) {
   if (parsed.data.checkpoint === 'CLINICAL_REVIEWER' && !can(user.role as any, 'clinical:approve')) {
     return NextResponse.json({ error: { code: 'CLINICAL_APPROVAL_DENIED', message: 'Only a qualified clinical reviewer may sign off' } }, { status: 403 });
   }
-  const request = await prisma.transferRequest.findUniqueOrThrow({ where: { id: parsed.data.requestId } });
+  const request = await prisma.transferRequest.findUnique({ where: { id: parsed.data.requestId } });
+  if (!request) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Transfer request not found' } }, { status: 404 });
   const approvals = await prisma.approval.findMany({ where: { requestId: request.id } });
   const done = new Set(approvals.map((a) => a.checkpoint));
   if (done.has(parsed.data.checkpoint)) return NextResponse.json({ error: { code: 'DUPLICATE_APPROVAL' } }, { status: 409 });
