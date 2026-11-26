@@ -6,7 +6,11 @@ import { prisma } from './db';
 export const ROLES = ['PLATFORM_ADMIN', 'REGIONAL_COORDINATOR', 'HOSPITAL_MANAGER', 'BLOOD_BANK_MANAGER', 'ANALYST', 'CLINICAL_REVIEWER'] as const;
 export type Role = (typeof ROLES)[number];
 
-const secret = () => new TextEncoder().encode(process.env.JWT_SECRET || 'hemonexus-dev-secret-change-me');
+const secret = () => {
+  const value = process.env.JWT_SECRET;
+  if (!value) throw new Error('JWT_SECRET is not configured');
+  return new TextEncoder().encode(value);
+};
 
 export async function hashPassword(password: string) { return bcrypt.hash(password, 10); }
 export async function verifyPassword(password: string, hash: string) { return bcrypt.compare(password, hash); }

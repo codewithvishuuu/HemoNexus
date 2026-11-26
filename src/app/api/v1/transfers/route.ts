@@ -43,6 +43,16 @@ export async function POST(req: Request) {
   if (!eligible(unit)) {
     return NextResponse.json({ error: { code: 'UNIT_INELIGIBLE', message: 'Unit has an unresolved quality, cold-chain or reservation issue' } }, { status: 409 });
   }
+  if (unit.group !== parsed.data.group || unit.component !== parsed.data.component || parsed.data.units !== 1) {
+    return NextResponse.json({ error: { code: 'UNIT_REQUEST_MISMATCH', message: 'Unit does not match the requested group, component or quantity' } }, { status: 422 });
+  }
+  if (parsed.data.toId === parsed.data.fromId) {
+    return NextResponse.json({ error: { code: 'INVALID_DESTINATION', message: 'Destination must differ from source' } }, { status: 422 });
+  }
+  const destination = await prisma.institution.findUnique({ where: { id: parsed.data.toId } });
+  if (!destination) {
+    return NextResponse.json({ error: { code: 'DESTINATION_NOT_FOUND', message: 'Destination institution does not exist' } }, { status: 404 });
+  }
 
   try {
     const request = await prisma.$transaction(async (tx) => {

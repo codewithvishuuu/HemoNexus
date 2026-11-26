@@ -18,6 +18,20 @@ export async function POST(req: Request) {
   }
   const request = await prisma.transferRequest.findUnique({ where: { id: parsed.data.requestId } });
   if (!request) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'Transfer request not found' } }, { status: 404 });
+
+  if (parsed.data.checkpoint !== 'CLINICAL_REVIEWER') {
+    const institutionalRoles = ['PLATFORM_ADMIN', 'REGIONAL_COORDINATOR', 'HOSPITAL_MANAGER', 'BLOOD_BANK_MANAGER'];
+    if (!institutionalRoles.includes(user.role)) {
+      return NextResponse.json({ error: { code: 'INSTITUTIONAL_APPROVAL_DENIED', message: 'This role cannot sign institutional checkpoints' } }, { status: 403 });
+    }
+    if (['HOSPITAL_MANAGER', 'BLOOD_BANK_MANAGER'].includes(user.role)) {
+      const targetInstitution = parsed.data.checkpoint === 'SENDING_INSTITUTION' ? request.fromId : request.toId;
+      if (user.institutionId !== targetInstitution) {
+        return NextResponse.json({ error: { code: 'CROSS_INSTITUTION', message: 'Signer is not a member of the relevant institution' } }, { status: 403 });
+      }
+    }
+  }
+
   const approvals = await prisma.approval.findMany({ where: { requestId: request.id } });
   const done = new Set(approvals.map((a) => a.checkpoint));
   if (done.has(parsed.data.checkpoint)) return NextResponse.json({ error: { code: 'DUPLICATE_APPROVAL' } }, { status: 409 });

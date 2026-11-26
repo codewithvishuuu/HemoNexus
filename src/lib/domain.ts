@@ -133,14 +133,24 @@ export async function runSimulation(input: { scenario: string; surgePct?: number
   const component = input.component ?? 'RBC';
   const snapshot = await prisma.bloodUnit.findMany({ where: { group, component } });
   const cloned = snapshot.map((u) => ({ ...u, collectedAt: new Date(u.collectedAt), expiresAt: new Date(u.expiresAt) }));
-  const surge = (input.surgePct ?? 30) / 100;
+  const scenario = input.scenario;
+  let surgePct = input.surgePct ?? 30;
+  let operation = 'demand surge applied to cloned snapshot';
   const region = 'East';
   const series = await getSeries(region, group, component);
   const base = forecast(series, Math.min(4, days), 'ets').point[0] ?? 0;
-  const simulatedDemand = base * (1 + surge);
-  const projected = Math.max(0, cloned.filter(eligible).length - Math.round(simulatedDemand - base));
-  const assumptions = [`scenario=${input.scenario}`, `surgePct=${input.surgePct ?? 30}`, `group=${group}`, `component=${component}`, `days=${days}`, 'cloned snapshot at run time'];
-  const result = { baselineAvailable: cloned.filter(eligible).length, projectedAvailable: projected, baselineDemand: base, simulatedDemand, deltaUnits: projected - cloned.filter(eligible).length };
+  const baselineStock = cloned.filter(eligible).length;
+
+  if (scenario === 'REGIONAL_SHORTAGE') { surgePct = Math.max(surgePct, 50); operation = 'regional surge (minimum +50%)'; }
+  if (scenario === 'INVENTORY_LOSS') { operation = '30% of eligible units removed from cloned snapshot'; }
+  if (scenario === 'ADDED_DONATIONS') { operation = 'inbound donations add 50% of one week of forecast demand'; }
+  const simulatedDemand = base * (1 + surgePct / 100);
+  let projected = Math.max(0, baselineStock - Math.round(simulatedDemand - base));
+  if (scenario === 'INVENTORY_LOSS') projected = Math.round(baselineStock * 0.7);
+  if (scenario === 'ADDED_DONATIONS') projected = baselineStock + Math.round(base * 0.5);
+
+  const assumptions = [`scenario=${scenario}`, `surgePct=${surgePct}`, `operation=${operation}`, `group=${group}`, `component=${component}`, `days=${days}`, 'cloned snapshot at run time'];
+  const result = { baselineAvailable: baselineStock, projectedAvailable: projected, baselineDemand: base, simulatedDemand, deltaUnits: projected - baselineStock };
   const run = await prisma.simulationRun.create({
     data: { actor: 'SIMULATED_USER', scenario: input.scenario, assumptions: JSON.stringify(assumptions), result: JSON.stringify(result) },
   });

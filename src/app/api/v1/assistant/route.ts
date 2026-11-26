@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { guard } from '@/lib/guard';
+import { guard, scopedInstitutionFilter } from '@/lib/guard';
 export const runtime = 'nodejs';
 
 const schema = z.object({ question: z.string().min(3).max(500) });
@@ -9,6 +9,7 @@ const schema = z.object({ question: z.string().min(3).max(500) });
 export async function POST(req: Request) {
   const g = await guard();
   if (g instanceof NextResponse) return g;
+  const scope = scopedInstitutionFilter(g.user);
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: { code: 'VALIDATION' } }, { status: 422 });
   const q = parsed.data.question.toLowerCase();
@@ -20,7 +21,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ answer: 'I cannot approve transfers or determine clinical suitability. A qualified human reviewer must sign off under your institution’s approved protocol.', sources: [], refused: true, dataMode: 'SIMULATED' });
   }
 
-  const scores = await prisma.riskScore.findMany({ include: { institution: true }, orderBy: { raw: 'desc' }, take: 5 });
+  const scores = await prisma.riskScore.findMany({
+    where: scope ? { institutionId: scope } : {},
+    include: { institution: true }, orderBy: { raw: 'desc' }, take: 5,
+  });
   const asOf = new Date().toISOString();
   if (/risk|shortage|critical|why/.test(q)) {
     const top = scores[0];
@@ -34,8 +38,13 @@ export async function POST(req: Request) {
   }
   if (/inventory|stock|unit|expiry/.test(q)) {
     const [units, ineligible] = await Promise.all([
-      prisma.bloodUnit.count(),
-      prisma.bloodUnit.count({ where: { OR: [{ quarantineState: { not: 'IN_STOCK' } }, { excursionOpen: true }, { qualityVerified: false }] } }),
+      prisma.bloodUnit.count({ where: scope ? { institutionId: scope } : {} }),
+      prisma.bloodUnit.count({
+        where: {
+          ...(scope ? { institutionId: scope } : {}),
+          OR: [{ quarantineState: { not: 'IN_STOCK' } }, { excursionOpen: true }, { qualityVerified: false }],
+        },
+      }),
     ]);
     return NextResponse.json({
       answer: `The simulated network holds ${units} recorded units. ${ineligible} are currently excluded from eligible stock because of quarantine, quality or temperature issues. Eligibility is recorded from verified facts, not decided by AI.`,
